@@ -155,6 +155,9 @@ android {
 }
 
 dependencies {
+    implementation project(':appcenter-crashes')
+    implementation project(':appcenter-analytics')
+    implementation project(':appcenter')
     implementation project(':react-native-geolocation-service')
     implementation project(':@react-native-community_toolbar-android')
     implementation project(':react-native-location')

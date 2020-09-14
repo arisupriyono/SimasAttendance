@@ -1,12 +1,12 @@
 import React, { Component } from 'react';
-import { Text, StyleSheet, View, TouchableOpacity, Alert, ActivityIndicator, Image , ScrollView , Linking, PermissionsAndroid} from 'react-native';
+import { Text, StyleSheet, View, TouchableOpacity, Alert, ActivityIndicator, Image , ScrollView , Linking, PermissionsAndroid, Platform} from 'react-native';
 import { getUniqueId, getManufacturer, getAndroidId } from 'react-native-device-info';
 import { Container, Content, Form, Item, Label, Input } from 'native-base';
 import Config from '../../configs/configs';
 import * as Constants from './../../configs/constants';
 import RNLocation from 'react-native-location';
 import Geolocation from 'react-native-geolocation-service';
-// import appConfig from './app.json';
+
 watchId = null;
 export default class Home extends Component {
     constructor(props) {
@@ -185,8 +185,8 @@ export default class Home extends Component {
         const uniqueID = getUniqueId();
         this.setState({uniqueID},()=>{
             this.checkUID(uniqueID);
-            this.locationInit();
-            this.getLocation();
+            Platform.OS === 'ios' ? this.getLocation() : this.locationInit();
+            
         });
     }
     
