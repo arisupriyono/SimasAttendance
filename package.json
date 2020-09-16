@@ -8,9 +8,9 @@
   },
   "dependencies": {
     "@react-native-community/toolbar-android": "0.1.0-rc.2",
-    "appcenter": "3.1.1",
-    "appcenter-analytics": "3.1.1",
-    "appcenter-crashes": "3.1.1",
+    "appcenter": "^3.1.1",
+    "appcenter-analytics": "^3.1.1",
+    "appcenter-crashes": "^3.1.1",
     "native-base": "^2.13.8",
     "react": "16.8.3",
     "react-native": "0.59.9",

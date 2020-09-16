@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { Text, View, SafeAreaView, StatusBar, AsyncStorage, Image, TouchableOpacity } from 'react-native';
+import { Text, View, SafeAreaView, StatusBar, AsyncStorage, Image, TouchableOpacity, Platform } from 'react-native';
 import { Actions, Router, Scene } from 'react-native-router-flux';
 import Home from './pages/Home/Home';
 
@@ -24,7 +24,7 @@ export class Routes extends Component {
             <SafeAreaView style={{ flex: 1 }}>
                 <StatusBar
                     backgroundColor='#990000'
-                    barStyle='dark-content'
+                    barStyle={Platform.OS == 'ios'?'dark-content':'light-content'}
                 />
                 <Router
                     navigationBarStyle={{ backgroundColor: '#990000' }}

@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { Text, StyleSheet, View, TouchableOpacity, Alert, ActivityIndicator, Image , ScrollView , Linking, PermissionsAndroid, Platform} from 'react-native';
+import { Text, StyleSheet, View, TouchableOpacity, Alert, ActivityIndicator, Image , ScrollView , Linking, PermissionsAndroid, Platform, TouchableWithoutFeedback, Keyboard} from 'react-native';
 import { getUniqueId, getManufacturer, getAndroidId } from 'react-native-device-info';
 import { Container, Content, Form, Item, Label, Input } from 'native-base';
 import Config from '../../configs/configs';
@@ -24,178 +24,38 @@ export default class Home extends Component {
             location: null,
             isLoading:true,
 
-            forceLocation: true,
-            highAccuracy: true,
-            loading: false,
-            showLocationDialog: true,
-            significantChanges: false,
-            updatesEnabled: false,
-            foregroundService: false,
+            CURRENT_GEOTAG_LAT:'',
+            CURRENT_GEOTAG_LONG:'',
+
+            OFFICE_GEOTAG_LAT:'',
+            OFFICE_GEOTAG_LONG:''
         }
     }
 
-    hasLocationPermission = async () => {
-        if (Platform.OS === 'ios') {
-          const hasPermission = await this.hasLocationPermissionIOS();
-          return hasPermission;
-        }
-    
-        if (Platform.OS === 'android' && Platform.Version < 23) {
-          return true;
-        }
-    
-        const hasPermission = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        );
-    
-        if (hasPermission) {
-          return true;
-        }
-    
-        const status = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        );
-    
-        if (status === PermissionsAndroid.RESULTS.GRANTED) {
-          return true;
-        }
-    
-        if (status === PermissionsAndroid.RESULTS.DENIED) {
-          ToastAndroid.show(
-            'Location permission denied by user.',
-            ToastAndroid.LONG,
-          );
-        } else if (status === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-          ToastAndroid.show(
-            'Location permission revoked by user.',
-            ToastAndroid.LONG,
-          );
-        }
-    
-        return false;
-      };
 
-    hasLocationPermissionIOS = async () => {
-        const openSetting = () => {
-          Linking.openSettings().catch(() => {
-            Alert.alert('Unable to open settings');
-          });
-        };
-        const status = await Geolocation.requestAuthorization('whenInUse');
-    
-        if (status === 'granted') {
-          return true;
-        }
-    
-        if (status === 'denied') {
-          Alert.alert('Location permission denied');
-        }
-    
-        if (status === 'disabled') {
-          Alert.alert(
-            `Turn on Location Services to allow Simas Attendance to determine your location.`,
-            '',
-            [
-              { text: 'Go to Settings', onPress: openSetting },
-              { text: "Don't Use Location", onPress: () => {} },
-            ],
-          );
-        }
-    
-        return false;
-      };
-
-      getLocationUpdates = async () => {
-        const hasLocationPermission = await this.hasLocationPermission();
-    
-        if (!hasLocationPermission) {
-          return;
-        }
-    
-        this.setState({ updatesEnabled: true }, () => {
-          this.watchId = Geolocation.watchPosition(
-            (position) => {
-            alert(position)
-              this.setState({ location: position });
-              console.log(position);
-            },
-            (error) => {
-              this.setState({ location: error });
-              console.log(error);
-            },
-            {
-              enableHighAccuracy: this.state.highAccuracy,
-              distanceFilter: 0,
-              interval: 5000,
-              fastestInterval: 2000,
-              forceRequestLocation: this.state.forceLocation,
-              showLocationDialog: this.state.showLocationDialog,
-              useSignificantChanges: this.state.significantChanges,
-            },
-          );
-        });
-      };
-
-      getLocation = async () => {
-
-        const hasLocationPermission = await this.hasLocationPermission();
-    
-        if (!hasLocationPermission) {
-          return;
-        }
-    
-        this.setState({ loading: true }, () => {
-          Geolocation.getCurrentPosition(
-            (position) => {
-                alert(position);
-              this.setState({ location: position, loading: false });
-              console.log(position);
-            },
-            (error) => {
-              this.setState({ location: error, loading: false });
-              console.log(error);
-            },
-            {
-              enableHighAccuracy: this.state.highAccuracy,
-              timeout: 15000,
-              maximumAge: 10000,
-              distanceFilter: 0,
-              forceRequestLocation: this.state.forceLocation,
-              showLocationDialog: this.state.showLocationDialog,
-            },
-          );
-        });
-      };
-
-      removeLocationUpdates = () => {
-        if (this.watchId !== null) {
-          this.stopForegroundService();
-          Geolocation.clearWatch(this.watchId);
-          this.watchId = null;
-          this.setState({ updatesEnabled: false });
-        }
-      };
-
-    componentWillUnmount(){
-        this.removeLocationUpdates();
-    }
-
-    componentDidMount(){
+    async componentDidMount(){
+        await this.locationInit();
 
         const uniqueID = getUniqueId();
         this.setState({uniqueID},()=>{
             this.checkUID(uniqueID);
-            Platform.OS === 'ios' ? this.getLocation() : this.locationInit();
-            
+            // Platform.OS == 'ios' ? this.locationInitIos() : this.locationInitAndro();
         });
     }
-    
 
-    locationInit() {
-        RNLocation.configure({
-            distanceFilter: 5.0,
-            maxWaitTime: 5000
-        }).then(() => RNLocation.requestPermission({
+    async locationInit(){
+        await RNLocation.configure({
+            distanceFilter: 2.0,
+            maxWaitTime: 1000,
+            desiredAccuracy: {
+                ios: "best",
+                android: "highAccuracy"
+            },
+            interval: 1000, // Milliseconds
+            fastestInterval: 2000,
+        })
+
+        await RNLocation.requestPermission({
             ios: "whenInUse",
             android: {
                 detail: "fine",
@@ -206,7 +66,7 @@ export default class Home extends Component {
                     buttonNegative: "Cancel"
                 }
             }
-        })).then(granted => {
+        }).then(granted => {
             if (granted) {
                 this.setState({
                     getLocPermission: 1
@@ -214,6 +74,49 @@ export default class Home extends Component {
                     this._startUpdatingLocation();
                 })
             }
+        });
+    }
+    
+
+    locationInitAndro() {
+        RNLocation.configure({
+            distanceFilter: 5.0,
+            maxWaitTime: 2000,
+            desiredAccuracy: {
+                ios: "best",
+                android: "balancedPowerAccuracy"
+            },
+            
+        })
+        .then(() => 
+        RNLocation.requestPermission({
+            ios: "whenInUse",
+            android: {
+                detail: "fine",
+                rationale: {
+                    title: "Location permission",
+                    message: "We use your location to complete this form",
+                    buttonPositive: "OK",
+                    buttonNegative: "Cancel"
+                }
+            }
+        })
+        )
+        .then(granted => {
+            if (granted) {
+                this.setState({
+                    getLocPermission: 1
+                }, () => {
+                    this._startUpdatingLocation();
+                })
+            }
+        });
+    }
+
+    locationInitIos(){
+        RNLocation.configure({distanceFilter: 5.0});
+        this.setState({getLocPermission: 1},()=>{
+            this._startUpdatingLocation();
         });
     }
 
@@ -225,7 +128,7 @@ export default class Home extends Component {
                 let latitude = locations[0].latitude;
                 let longitude = locations[0].longitude;
                 let loc = latitude + ',' + longitude;
-                this.setState({ location: loc });
+                this.setState({ location: loc, CURRENT_GEOTAG_LAT: latitude, CURRENT_GEOTAG_LONG:longitude });
                 if(unsubscribe){
                     unsubscribe();
                 }
@@ -234,7 +137,7 @@ export default class Home extends Component {
     };
 
     checkUID(uidVal){
-        console.log('jalan kok');
+        console.log('jalan kok' + '' + uidVal);
         fetch(Config.CheckAPI.CheckUID + '?uid_hp=' +uidVal)
             .then((response) => response.json())
             .then((responseJson) => {
@@ -250,6 +153,7 @@ export default class Home extends Component {
               this.setState({NIK, TANGGAL_IN, GEOTAG_IN, TANGGAL_OUT, GEOTAG_OUT});
               if(NIK!= undefined && NIK.length == 6){
                   this.checkNIK();
+                  Keyboard.dismiss();
               }
 
               this.setState({isLoading:false})
@@ -267,27 +171,66 @@ export default class Home extends Component {
               let error = responseJson[0].error;
               let message = responseJson[0].message;
               let NAMA = responseJson[0].NAMA;
-              this.setState({ NAMA });
+              let OFFICE_GEOTAG_LAT = responseJson[0].OFFICE_GEOTAG_LAT
+              let OFFICE_GEOTAG_LONG = responseJson[0].OFFICE_GEOTAG_LONG
+              this.setState({ NAMA, OFFICE_GEOTAG_LAT, OFFICE_GEOTAG_LONG });
             }).catch((err)=>{
                 console.log(err);
             })
     }
     
 
-    submitIn(){
-        let NIK = this.state.NIK;
-        let location = this.state.location;
-        let getLocPermission = this.state.getLocPermission;
-        let uniqueID = this.state.uniqueID;
+    async submitIn(){
+        await RNLocation.checkPermission({
+            ios: 'whenInUse', // or 'always'
+            android: {
+              detail: 'fine' // or 'fine'
+            }
+          }).then((permission)=>{
+            if(!permission){
+                RNLocation.requestPermission({
+                    ios: "whenInUse",
+                    android: {
+                        detail: "fine",
+                        rationale: {
+                            title: "Location permission",
+                            message: "We use your location to complete this form",
+                            buttonPositive: "OK",
+                            buttonNegative: "Cancel"
+                        }
+                    }
+                }).then(granted => {
+                    if (granted) {
+                        this.setState({
+                            getLocPermission: 1
+                        }, () => {
+                            this._startUpdatingLocation();
+                        })
+                    }
+                });
+            }
+          })
 
-        if(NIK == '' || NIK == null){
+        if(this.state.NIK != '' && this.state.NIK != null){
+           this.checkNIK();
+        }
+
+        if(this.state.getLocPermission!= 0){
+            this._startUpdatingLocation();
+        }
+
+        if(this.state.NIK == '' || this.state.NIK == null){
             Alert.alert('','Mohon untuk mengisi NIK anda.');
-        }else if(getLocPermission == 0){
+        }else if(this.state.getLocPermission == 0){
             Alert.alert('','Pastikan anda memberikan akses aplikasi terhadap lokasi anda agar aplikasi dapat digunakan.');
-        }else if(location == null){
+        }else if(this.state.location == null){
             Alert.alert('','Pastikan GPS anda aktif agar aplikasi dapat digunakan.');
+        }else if(this.state.OFFICE_GEOTAG_LAT == '' || this.state.OFFICE_GEOTAG_LAT == null || this.state.OFFICE_GEOTAG_LAT == ' ' || this.state.OFFICE_GEOTAG_LONG == '' || this.state.OFFICE_GEOTAG_LONG == null|| this.state.OFFICE_GEOTAG_LONG == ' '){
+            Alert.alert('','Jarak tidak dapat ditentukan mohon hubungi administrator.');
+        }else if(this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, this.state.OFFICE_GEOTAG_LAT, this.state.OFFICE_GEOTAG_LONG) > 0.5){
+            Alert.alert('','Pastikan jarak anda dengan kantor tidak lebih dari 500 m.');
         }else{
-            fetch(Config.AttendanceAPI.Entry+ '?nik='+NIK+'&uid_hp='+uniqueID+'&absen_typ=I&geo_tag='+location)
+            fetch(Config.AttendanceAPI.Entry+ '?nik='+this.state.NIK+'&uid_hp='+this.state.uniqueID+'&absen_typ=I&geo_tag='+this.state.location)
             .then((response) => response.json())
             .then((responseJson) => {
               let sts = responseJson[0].Result_sts;
@@ -306,21 +249,77 @@ export default class Home extends Component {
         }
     }
 
-    submitOut(){
-        let NIK = this.state.NIK;
-        let uniqueID = this.state.uniqueID;
-        let location = this.state.location;
-        let getLocPermission = this.state.getLocPermission;
+    dialogOut(){
+        Alert.alert(
+            '',
+            'Apakah anda yakin untuk absen pulang?',
+            [
+                {
+                    text: 'Cancel',
+                    onPress: () => console.log('Cancel Pressed'),
+                    style: 'cancel',
+                },
+                {
+                    text: 'Yes', onPress: () => {
+                       this.submitOut();
+                    }
+                },
+            ],
+            { cancelable: false },
+        );
+    }
 
-        if(NIK == '' || NIK == null){
+    async submitOut(){
+        await RNLocation.checkPermission({
+            ios: 'whenInUse', // or 'always'
+            android: {
+              detail: 'fine' // or 'fine'
+            }
+          }).then((permission)=>{
+            if(!permission){
+                RNLocation.requestPermission({
+                    ios: "whenInUse",
+                    android: {
+                        detail: "fine",
+                        rationale: {
+                            title: "Location permission",
+                            message: "We use your location to complete this form",
+                            buttonPositive: "OK",
+                            buttonNegative: "Cancel"
+                        }
+                    }
+                }).then(granted => {
+                    if (granted) {
+                        this.setState({
+                            getLocPermission: 1
+                        }, () => {
+                            this._startUpdatingLocation();
+                        })
+                    }
+                });
+            }
+          })
+
+        if(this.state.NIK != '' && this.state.NIK != null){
+            this.checkNIK();
+        }
+        
+        if(this.state.getLocPermission!= 0){
+            this._startUpdatingLocation();
+        }
+
+        if(this.state.NIK == '' || this.state.NIK == null){
             Alert.alert('','Mohon untuk mengisi NIK anda.');
-        }else if(getLocPermission == 0){
+        }else if(this.state.getLocPermission == 0){
             Alert.alert('','Pastikan anda memberikan akses aplikasi terhadap lokasi anda agar aplikasi dapat digunakan.');
-        }else if(location == null){
+        }else if(this.state.location == null){
             Alert.alert('','Pastikan GPS anda aktif agar aplikasi dapat digunakan.');
+        }else if(this.state.OFFICE_GEOTAG_LAT == '' || this.state.OFFICE_GEOTAG_LAT == null || this.state.OFFICE_GEOTAG_LAT == ' ' || this.state.OFFICE_GEOTAG_LONG == '' || this.state.OFFICE_GEOTAG_LONG == null|| this.state.OFFICE_GEOTAG_LONG == ' '){
+            Alert.alert('','Jarak tidak dapat ditentukan mohon hubungi administrator.');
+        }else if(this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, this.state.OFFICE_GEOTAG_LAT, this.state.OFFICE_GEOTAG_LONG) > 0.5){
+            Alert.alert('','Pastikan jarak anda dengan kantor tidak lebih dari 500 m.');
         }else{
-            console.log(Config.AttendanceAPI.Entry+ '?nik='+NIK+'&uid_hp='+uniqueID+'&absen_typ=O&geo_tag='+location);
-            fetch(Config.AttendanceAPI.Entry+ '?nik='+NIK+'&uid_hp='+uniqueID+'&absen_typ=O&geo_tag='+location)
+            fetch(Config.AttendanceAPI.Entry+ '?nik='+this.state.NIK+'&uid_hp='+this.state.uniqueID+'&absen_typ=O&geo_tag='+this.state.location)
             .then((response) => response.json())
             .then((responseJson) => {
               let sts = responseJson[0].Result_sts;
@@ -363,16 +362,32 @@ export default class Home extends Component {
         
     }
 
-    setAccuracy = (value) => this.setState({ highAccuracy: value });
-    setSignificantChange = (value) =>
-      this.setState({ significantChanges: value });
-    setLocationDialog = (value) => this.setState({ showLocationDialog: value });
-    setForceLocation = (value) => this.setState({ forceLocation: value });
-    setForegroundService = (value) => this.setState({ foregroundService: value });
+
+    getDistance(lat1, lon1, lat2, lon2) 
+    {
+      var R = 6371; // km
+      var dLat = this.toRad(lat2-lat1);
+      var dLon = this.toRad(lon2-lon1);
+      var lat1 = this.toRad(lat1);
+      var lat2 = this.toRad(lat2);
+
+      var a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2); 
+      var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+      var d = R * c;
+      return d;
+    }
+
+    // Converts numeric degrees to radians
+    toRad(Value) 
+    {
+        return Value * Math.PI / 180;
+    }
+
     
     render() {
         const { NIK, TANGGAL_IN, GEOTAG_IN, TANGGAL_OUT, GEOTAG_OUT, NAMA, isLoading } = this.state;
         return (
+            <TouchableWithoutFeedback onPress={()=>{Keyboard.dismiss()}}>
             <View style={{ flex:1 }}>
                 {isLoading ? 
                     <View style={{alignItems:'center', justifyContent:'center', height: Constants.heightDevice * 0.85}}>
@@ -424,7 +439,7 @@ export default class Home extends Component {
                                 </View>
                             </TouchableOpacity>
                             <View style={{marginHorizontal:10}}/>
-                            <TouchableOpacity onPress={()=>{this.submitOut()}}>
+                            <TouchableOpacity onPress={()=>{this.dialogOut()}}>
                                 <View  style={{backgroundColor:'#7ea04d', width:100, height:40, alignItems:'center', justifyContent:'center', borderRadius:8}}>
                                     <Text style={{fontWeight:'bold', color:'white'}}>
                                         PULANG
@@ -473,10 +488,10 @@ export default class Home extends Component {
                     </View>
                 }
                  <View style={{position:'absolute', bottom:20, width:Constants.widthDevice, alignItems:'center'}}>
-                    <Text>Ver. 1.0</Text>
+                    <Text>Ver. 1.1</Text>
                 </View>
             </View>
-              
+        </TouchableWithoutFeedback>
         )
     }
 }
