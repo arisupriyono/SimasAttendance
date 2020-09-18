@@ -39,7 +39,6 @@ export default class Home extends Component {
         const uniqueID = getUniqueId();
         this.setState({uniqueID},()=>{
             this.checkUID(uniqueID);
-            // Platform.OS == 'ios' ? this.locationInitIos() : this.locationInitAndro();
         });
     }
 
@@ -70,78 +69,36 @@ export default class Home extends Component {
             if (granted) {
                 this.setState({
                     getLocPermission: 1
-                }, () => {
-                    this._startUpdatingLocation();
                 })
             }
         });
     }
     
 
-    locationInitAndro() {
-        RNLocation.configure({
-            distanceFilter: 5.0,
-            maxWaitTime: 2000,
-            desiredAccuracy: {
-                ios: "best",
-                android: "balancedPowerAccuracy"
-            },
-            
-        })
-        .then(() => 
-        RNLocation.requestPermission({
-            ios: "whenInUse",
-            android: {
-                detail: "fine",
-                rationale: {
-                    title: "Location permission",
-                    message: "We use your location to complete this form",
-                    buttonPositive: "OK",
-                    buttonNegative: "Cancel"
-                }
-            }
-        })
-        )
-        .then(granted => {
-            if (granted) {
-                this.setState({
-                    getLocPermission: 1
-                }, () => {
-                    this._startUpdatingLocation();
-                })
-            }
-        });
-    }
-
-    locationInitIos(){
-        RNLocation.configure({distanceFilter: 5.0});
-        this.setState({getLocPermission: 1},()=>{
-            this._startUpdatingLocation();
-        });
-    }
-
-
-
-    _startUpdatingLocation() {
-        const unsubscribe = RNLocation.subscribeToLocationUpdates(
-            locations => {
-                let latitude = locations[0].latitude;
-                let longitude = locations[0].longitude;
-                let loc = latitude + ',' + longitude;
+    async _startUpdatingLocation() {
+       const unsubscribe = await  RNLocation.subscribeToLocationUpdates(
+          locations => {
+                var maxTime = Math.max.apply(Math,locations.map(function(o){return o.timestamp;}))
+                
+                let idx =  locations.findIndex(function (item, i) {
+                    return item.timestamp == maxTime 
+                });
+                let latitude =  locations[idx].latitude;
+                let longitude =  locations[idx].longitude;
+                let loc =  latitude + ',' + longitude;
                 this.setState({ location: loc, CURRENT_GEOTAG_LAT: latitude, CURRENT_GEOTAG_LONG:longitude });
                 if(unsubscribe){
-                    unsubscribe();
+                     unsubscribe();
                 }
-            }
+
+             }
         );
     };
 
     checkUID(uidVal){
-        console.log('jalan kok' + '' + uidVal);
         fetch(Config.CheckAPI.CheckUID + '?uid_hp=' +uidVal)
             .then((response) => response.json())
             .then((responseJson) => {
-            console.log(responseJson);
               let error = responseJson[0].error;
               let message = responseJson[0].message;
               let NIK = responseJson[0].NIK;
@@ -167,7 +124,6 @@ export default class Home extends Component {
         fetch(Config.CheckAPI.CheckNIK + '?nik=' +this.state.NIK)
             .then((response) => response.json())
             .then((responseJson) => {
-            console.log(responseJson);
               let error = responseJson[0].error;
               let message = responseJson[0].message;
               let NAMA = responseJson[0].NAMA;
@@ -181,6 +137,8 @@ export default class Home extends Component {
     
 
     async submitIn(){
+        await this.setState({locations:'', CURRENT_GEOTAG_LAT:'', CURRENT_GEOTAG_LONG:'', isLoading: true });
+
         await RNLocation.checkPermission({
             ios: 'whenInUse', // or 'always'
             android: {
@@ -203,8 +161,6 @@ export default class Home extends Component {
                     if (granted) {
                         this.setState({
                             getLocPermission: 1
-                        }, () => {
-                            this._startUpdatingLocation();
                         })
                     }
                 });
@@ -212,25 +168,30 @@ export default class Home extends Component {
           })
 
         if(this.state.NIK != '' && this.state.NIK != null){
-           this.checkNIK();
+           await this.checkNIK();
+
         }
 
         if(this.state.getLocPermission!= 0){
-            this._startUpdatingLocation();
+            await this._startUpdatingLocation();
         }
 
+       setTimeout(()=>{this.postData('I')},2000);     
+    }
+
+    postData(val){
         if(this.state.NIK == '' || this.state.NIK == null){
             Alert.alert('','Mohon untuk mengisi NIK anda.');
         }else if(this.state.getLocPermission == 0){
             Alert.alert('','Pastikan anda memberikan akses aplikasi terhadap lokasi anda agar aplikasi dapat digunakan.');
         }else if(this.state.location == null){
-            Alert.alert('','Pastikan GPS anda aktif agar aplikasi dapat digunakan.');
+            Alert.alert('','Lokasi tidak dapat ditentukan silahkan coba beberapa saat lagi.');
         }else if(this.state.OFFICE_GEOTAG_LAT == '' || this.state.OFFICE_GEOTAG_LAT == null || this.state.OFFICE_GEOTAG_LAT == ' ' || this.state.OFFICE_GEOTAG_LONG == '' || this.state.OFFICE_GEOTAG_LONG == null|| this.state.OFFICE_GEOTAG_LONG == ' '){
             Alert.alert('','Jarak tidak dapat ditentukan mohon hubungi administrator.');
         }else if(this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, this.state.OFFICE_GEOTAG_LAT, this.state.OFFICE_GEOTAG_LONG) > 0.5){
             Alert.alert('','Pastikan jarak anda dengan kantor tidak lebih dari 500 m.');
         }else{
-            fetch(Config.AttendanceAPI.Entry+ '?nik='+this.state.NIK+'&uid_hp='+this.state.uniqueID+'&absen_typ=I&geo_tag='+this.state.location)
+            fetch(Config.AttendanceAPI.Entry+ '?nik='+this.state.NIK+'&uid_hp='+this.state.uniqueID+'&absen_typ='+ val +'&geo_tag='+this.state.location)
             .then((response) => response.json())
             .then((responseJson) => {
               let sts = responseJson[0].Result_sts;
@@ -247,6 +208,8 @@ export default class Home extends Component {
                 console.log(err);
             })
         }
+
+        this.setState({isLoading : false});
     }
 
     dialogOut(){
@@ -270,6 +233,7 @@ export default class Home extends Component {
     }
 
     async submitOut(){
+        await this.setState({locations:'', CURRENT_GEOTAG_LAT:'', CURRENT_GEOTAG_LONG:'', isLoading: true });
         await RNLocation.checkPermission({
             ios: 'whenInUse', // or 'always'
             android: {
@@ -292,8 +256,6 @@ export default class Home extends Component {
                     if (granted) {
                         this.setState({
                             getLocPermission: 1
-                        }, () => {
-                            this._startUpdatingLocation();
                         })
                     }
                 });
@@ -301,52 +263,25 @@ export default class Home extends Component {
           })
 
         if(this.state.NIK != '' && this.state.NIK != null){
-            this.checkNIK();
+            await this.checkNIK();
         }
         
         if(this.state.getLocPermission!= 0){
-            this._startUpdatingLocation();
+            await this._startUpdatingLocation();
         }
 
-        if(this.state.NIK == '' || this.state.NIK == null){
-            Alert.alert('','Mohon untuk mengisi NIK anda.');
-        }else if(this.state.getLocPermission == 0){
-            Alert.alert('','Pastikan anda memberikan akses aplikasi terhadap lokasi anda agar aplikasi dapat digunakan.');
-        }else if(this.state.location == null){
-            Alert.alert('','Pastikan GPS anda aktif agar aplikasi dapat digunakan.');
-        }else if(this.state.OFFICE_GEOTAG_LAT == '' || this.state.OFFICE_GEOTAG_LAT == null || this.state.OFFICE_GEOTAG_LAT == ' ' || this.state.OFFICE_GEOTAG_LONG == '' || this.state.OFFICE_GEOTAG_LONG == null|| this.state.OFFICE_GEOTAG_LONG == ' '){
-            Alert.alert('','Jarak tidak dapat ditentukan mohon hubungi administrator.');
-        }else if(this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, this.state.OFFICE_GEOTAG_LAT, this.state.OFFICE_GEOTAG_LONG) > 0.5){
-            Alert.alert('','Pastikan jarak anda dengan kantor tidak lebih dari 500 m.');
-        }else{
-            fetch(Config.AttendanceAPI.Entry+ '?nik='+this.state.NIK+'&uid_hp='+this.state.uniqueID+'&absen_typ=O&geo_tag='+this.state.location)
-            .then((response) => response.json())
-            .then((responseJson) => {
-              let sts = responseJson[0].Result_sts;
-              let message = responseJson[0].Result_msg;
-              if(sts == '1'){
-                Alert.alert('',message);
-              }else{
-                Alert.alert('',message);
-              }
-              this.checkUID(this.state.uniqueID);
-
-            }).catch((err)=>{
-                this.setState({isLoading:false});
-                console.log(err);
-            })
-        }
+       setTimeout(()=>{this.postData('O')},2000);     
     }
 
     handleNIKchange = (text)=>{
         this.setState({ NIK : text },()=>{
             if(text.length == 6){
                 this.checkNIK();
-            }else{
+            }
+            else{
                 this.setState({ NAMA:'' })
             }
-        });
-        
+        });   
     }
 
     openMaps(link){
@@ -432,17 +367,17 @@ export default class Home extends Component {
                         
                         <View style={{flexDirection:'row', alignItems:'center', justifyContent:'center', marginBottom: 0.1 * Constants.heightDevice}}>
                             <TouchableOpacity onPress={()=>{this.submitIn()}}>
-                                <View style={{backgroundColor:'#7ea04d', width:100, height:40, alignItems:'center', justifyContent:'center', borderRadius:8}}>
+                                <View style={{backgroundColor:'#7ea04d', width:120, height:40, alignItems:'center', justifyContent:'center', borderRadius:8}}>
                                     <Text style={{fontWeight:'bold', color:'white'}}>
-                                        MASUK
+                                        MASUK (IN)
                                     </Text>
                                 </View>
                             </TouchableOpacity>
                             <View style={{marginHorizontal:10}}/>
                             <TouchableOpacity onPress={()=>{this.dialogOut()}}>
-                                <View  style={{backgroundColor:'#7ea04d', width:100, height:40, alignItems:'center', justifyContent:'center', borderRadius:8}}>
+                                <View  style={{backgroundColor:'#7ea04d', width:120, height:40, alignItems:'center', justifyContent:'center', borderRadius:8}}>
                                     <Text style={{fontWeight:'bold', color:'white'}}>
-                                        PULANG
+                                        KELUAR (OUT)
                                     </Text>
                                 </View>
                             </TouchableOpacity>
@@ -488,7 +423,7 @@ export default class Home extends Component {
                     </View>
                 }
                  <View style={{position:'absolute', bottom:20, width:Constants.widthDevice, alignItems:'center'}}>
-                    <Text>Ver. 1.1</Text>
+                    <Text>Ver. 1.2</Text>
                 </View>
             </View>
         </TouchableWithoutFeedback>
