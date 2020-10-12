@@ -14,10 +14,14 @@ switch (server) {
   const Config = {
     CheckAPI: {
       CheckUID : `${baseUrl}check_UID_HP.php`,
-      CheckNIK: `${baseUrl}check_NIK.php` 
+      // CheckNIK: `${baseUrl}check_NIK.php`,
+      CheckNIK: `${baseUrl}check_NIK_Enhch.php`
     },
     AttendanceAPI:{
       Entry : `${baseUrl}exec_Entry_Absensi.php`
+    },
+    LoggingAPI:{
+      Logger : `${baseUrl}logger.php`
     }
   };
   

@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import { Text, StyleSheet, View, TouchableOpacity, Alert, ActivityIndicator, Image , ScrollView , Linking, PermissionsAndroid, Platform, TouchableWithoutFeedback, Keyboard} from 'react-native';
-import { getUniqueId, getManufacturer, getAndroidId } from 'react-native-device-info';
+import { getUniqueId, getVersion } from 'react-native-device-info';
 import { Container, Content, Form, Item, Label, Input } from 'native-base';
 import Config from '../../configs/configs';
 import * as Constants from './../../configs/constants';
@@ -28,7 +28,10 @@ export default class Home extends Component {
             CURRENT_GEOTAG_LONG:'',
 
             OFFICE_GEOTAG_LAT:'',
-            OFFICE_GEOTAG_LONG:''
+            OFFICE_GEOTAG_LONG:'',
+            OFFICE_LOCATIONS:[],
+
+            appVer: getVersion()
         }
     }
 
@@ -40,14 +43,15 @@ export default class Home extends Component {
         this.setState({uniqueID},()=>{
             this.checkUID(uniqueID);
         });
+
     }
 
     async locationInit(){
         await RNLocation.configure({
-            distanceFilter: 2.0,
+            distanceFilter: 0,
             maxWaitTime: 1000,
             desiredAccuracy: {
-                ios: "best",
+                ios: "best", //bestForNavigation // testing
                 android: "highAccuracy"
             },
             interval: 1000, // Milliseconds
@@ -77,20 +81,21 @@ export default class Home extends Component {
 
     async _startUpdatingLocation() {
        const unsubscribe = await  RNLocation.subscribeToLocationUpdates(
-          locations => {
-                var maxTime = Math.max.apply(Math,locations.map(function(o){return o.timestamp;}))
+         async locations => {
+                var maxTime = await Math.max.apply(Math,locations.map(function(o){return o.timestamp;}))
                 
-                let idx =  locations.findIndex(function (item, i) {
+                let idx =  await locations.findIndex(function (item, i) {
                     return item.timestamp == maxTime 
                 });
                 let latitude =  locations[idx].latitude;
                 let longitude =  locations[idx].longitude;
                 let loc =  latitude + ',' + longitude;
-                this.setState({ location: loc, CURRENT_GEOTAG_LAT: latitude, CURRENT_GEOTAG_LONG:longitude });
+                await this.setState({ location: loc, CURRENT_GEOTAG_LAT: latitude, CURRENT_GEOTAG_LONG:longitude });
+                console.log('lokasi2'+loc)
+
                 if(unsubscribe){
                      unsubscribe();
                 }
-
              }
         );
     };
@@ -120,24 +125,27 @@ export default class Home extends Component {
             })
     }
     
-    checkNIK(){
-        fetch(Config.CheckAPI.CheckNIK + '?nik=' +this.state.NIK)
-            .then((response) => response.json())
-            .then((responseJson) => {
-              let error = responseJson[0].error;
-              let message = responseJson[0].message;
-              let NAMA = responseJson[0].NAMA;
-              let OFFICE_GEOTAG_LAT = responseJson[0].OFFICE_GEOTAG_LAT
-              let OFFICE_GEOTAG_LONG = responseJson[0].OFFICE_GEOTAG_LONG
-              this.setState({ NAMA, OFFICE_GEOTAG_LAT, OFFICE_GEOTAG_LONG });
-            }).catch((err)=>{
-                console.log(err);
-            })
-    }
+    checkNIK = async () => {
+        try {
+          let response = await fetch(
+            Config.CheckAPI.CheckNIK + '?nik=' +this.state.NIK
+          );
+            let responseJson = await response.json();
+            let error = responseJson[0].error;
+            let message = responseJson[0].message;
+            let NAMA = responseJson[0].NAME;
+            let OFFICE_LOCATIONS = responseJson[0].LOCATION;
+            await this.setState({ NAMA, OFFICE_LOCATIONS });
+            console.log('nik2');
+
+        } catch (error) {
+          console.log(error);
+        }
+    };
     
 
     async submitIn(){
-        await this.setState({locations:'', CURRENT_GEOTAG_LAT:'', CURRENT_GEOTAG_LONG:'', isLoading: true });
+        await this.setState({locations:null, CURRENT_GEOTAG_LAT:'', CURRENT_GEOTAG_LONG:'', isLoading: true });
 
         await RNLocation.checkPermission({
             ios: 'whenInUse', // or 'always'
@@ -176,40 +184,71 @@ export default class Home extends Component {
             await this._startUpdatingLocation();
         }
 
-       setTimeout(()=>{this.postData('I')},2000);     
+        var timerLoc = setInterval(() => {
+            console.log('timer')
+           if(this.state.CURRENT_GEOTAG_LAT!='' && this.state.CURRENT_GEOTAG_LAT != null && this.state.CURRENT_GEOTAG_LONG!='' && this.state.CURRENT_GEOTAG_LONG != null){
+                clearInterval(timerLoc);
+                this.postData('I');
+           }
+        }, 100);
+
+
+      
     }
 
-    postData(val){
+    async postData(val){
+        console.log('submitdata');
+        
         if(this.state.NIK == '' || this.state.NIK == null){
             Alert.alert('','Mohon untuk mengisi NIK anda.');
         }else if(this.state.getLocPermission == 0){
             Alert.alert('','Pastikan anda memberikan akses aplikasi terhadap lokasi anda agar aplikasi dapat digunakan.');
         }else if(this.state.location == null){
             Alert.alert('','Lokasi tidak dapat ditentukan silahkan coba beberapa saat lagi.');
-        }else if(this.state.OFFICE_GEOTAG_LAT == '' || this.state.OFFICE_GEOTAG_LAT == null || this.state.OFFICE_GEOTAG_LAT == ' ' || this.state.OFFICE_GEOTAG_LONG == '' || this.state.OFFICE_GEOTAG_LONG == null|| this.state.OFFICE_GEOTAG_LONG == ' '){
-            Alert.alert('','Jarak tidak dapat ditentukan mohon hubungi administrator.');
-        }else if(this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, this.state.OFFICE_GEOTAG_LAT, this.state.OFFICE_GEOTAG_LONG) > 0.5){
-            Alert.alert('','Pastikan jarak anda dengan kantor tidak lebih dari 500 m.');
-        }else{
-            fetch(Config.AttendanceAPI.Entry+ '?nik='+this.state.NIK+'&uid_hp='+this.state.uniqueID+'&absen_typ='+ val +'&geo_tag='+this.state.location)
-            .then((response) => response.json())
-            .then((responseJson) => {
-              let sts = responseJson[0].Result_sts;
-              let message = responseJson[0].Result_msg;
-              if(sts == '1'){
-                Alert.alert('',message);
-              }else{
-                Alert.alert('',message);
-              }
+        }
+        else{
+            if(this.state.OFFICE_LOCATIONS.length < 1){
+                Alert.alert('','Lokasi kantor tidak dapat ditentukan silahkan coba beberapa saat lagi.');
+            }else{
+                let passed = false;
+                let office_lat_tmp = '';
+                let office_long_tmp = '';
+                let distance = '';
+                for(let i = 0; i < this.state.OFFICE_LOCATIONS.length; i ++){
+                    office_lat_tmp = this.state.OFFICE_LOCATIONS[i].OFFICE_GEOTAG_LAT;
+                    office_long_tmp = this.state.OFFICE_LOCATIONS[i].OFFICE_GEOTAG_LONG;
+                 
+                    distance = await this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, office_lat_tmp, office_long_tmp);
+                 
+                    if(distance <= 0.5){
+                        passed = true;
+                    }
+                }
 
-              this.checkUID(this.state.uniqueID);
-            }).catch((err)=>{
-                this.setState({isLoading:false});
-                console.log(err);
-            })
+                if(passed === false){
+                    Alert.alert('','Pastikan jarak anda dengan kantor tidak lebih dari 500 m.');
+                }else{
+                    fetch(Config.AttendanceAPI.Entry+ '?nik='+this.state.NIK+'&uid_hp='+this.state.uniqueID+'&absen_typ='+ val +'&geo_tag='+this.state.location)
+                        .then((response) => response.json())
+                        .then((responseJson) => {
+                            let sts = responseJson[0].Result_sts;
+                            let message = responseJson[0].Result_msg;
+                            if(sts == '1'){
+                                Alert.alert('',message);
+                            }else{
+                                Alert.alert('',message);
+                            }
+                            this.checkUID(this.state.uniqueID);
+                        }).catch((err)=>{
+                            this.setState({isLoading:false});
+                            Alert.alert('',err);
+                        })
+                }
+            }
         }
 
         this.setState({isLoading : false});
+        this.logging(val);
     }
 
     dialogOut(){
@@ -233,7 +272,7 @@ export default class Home extends Component {
     }
 
     async submitOut(){
-        await this.setState({locations:'', CURRENT_GEOTAG_LAT:'', CURRENT_GEOTAG_LONG:'', isLoading: true });
+        await this.setState({locations:null, CURRENT_GEOTAG_LAT:'', CURRENT_GEOTAG_LONG:'', isLoading: true });
         await RNLocation.checkPermission({
             ios: 'whenInUse', // or 'always'
             android: {
@@ -270,7 +309,16 @@ export default class Home extends Component {
             await this._startUpdatingLocation();
         }
 
-       setTimeout(()=>{this.postData('O')},2000);     
+        var timerLoc = setInterval(() => {
+            if(this.state.CURRENT_GEOTAG_LAT!='' && this.state.CURRENT_GEOTAG_LAT != null && this.state.CURRENT_GEOTAG_LONG!='' && this.state.CURRENT_GEOTAG_LONG != null){
+                 clearInterval(timerLoc);
+                 this.postData('O');
+            }
+         }, 100);
+    }
+
+    logging(type){
+        fetch(Config.LoggingAPI.Logger+ '?nik='+this.state.NIK+'&geo_tag='+this.state.location+'&absen_typ='+type+'&app_ver='+this.state.appVer);
     }
 
     handleNIKchange = (text)=>{
@@ -283,6 +331,7 @@ export default class Home extends Component {
             }
         });   
     }
+
 
     openMaps(link){
         if(link != null && link !='' && link != undefined){
@@ -423,7 +472,7 @@ export default class Home extends Component {
                     </View>
                 }
                  <View style={{position:'absolute', bottom:20, width:Constants.widthDevice, alignItems:'center'}}>
-                    <Text>Ver. 1.2</Text>
+                    <Text>{'Ver. '+this.state.appVer}</Text>
                 </View>
             </View>
         </TouchableWithoutFeedback>
