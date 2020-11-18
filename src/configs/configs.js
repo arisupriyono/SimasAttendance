@@ -22,6 +22,9 @@ switch (server) {
     },
     LoggingAPI:{
       Logger : `${baseUrl}logger.php`
+    },
+    ClockAPI:{
+      Clock: `${baseUrl}servertime.php`
     }
   };
   

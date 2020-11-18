@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { Text, StyleSheet, View, TouchableOpacity, Alert, ActivityIndicator, Image , ScrollView , Linking, PermissionsAndroid, Platform, TouchableWithoutFeedback, Keyboard} from 'react-native';
+import { Text, StyleSheet, View, TouchableOpacity, Alert, ActivityIndicator, Image , ScrollView , Linking, PermissionsAndroid, Platform, TouchableWithoutFeedback, Keyboard, AppState} from 'react-native';
 import { getUniqueId, getVersion } from 'react-native-device-info';
 import { Container, Content, Form, Item, Label, Input } from 'native-base';
 import Config from '../../configs/configs';
@@ -8,6 +8,9 @@ import RNLocation from 'react-native-location';
 import Geolocation from 'react-native-geolocation-service';
 
 watchId = null;
+let interval1;
+let interval2;
+
 export default class Home extends Component {
     constructor(props) {
         super(props)
@@ -31,19 +34,104 @@ export default class Home extends Component {
             OFFICE_GEOTAG_LONG:'',
             OFFICE_LOCATIONS:[],
 
-            appVer: getVersion()
+            appVer: getVersion(),
+
+            CLOCK: '00:00:00',
+            appState: AppState.currentState,
+            clockLoading: true
+
         }
+    }
+
+    _handleAppStateChange = (nextAppState) => {
+        clearInterval(interval1);clearInterval(interval2);
+
+        if (this.state.appState.match(/inactive|background/) && nextAppState === 'active') {
+            this.setState({clockLoading:true},()=>{
+                this.getServerTime();
+                interval1 = setInterval(()=>{
+                    this.updateClock();
+                },1000)
+        
+                interval2 = setInterval(()=>{
+                    this.getServerTime();
+                },300000)
+            })
+        }
+        this.setState({ appState: nextAppState });
+    }
+
+    componentWillUnmount() {
+        AppState.removeEventListener('change', this._handleAppStateChange);
+        clearInterval(interval1);clearInterval(interval2);
     }
 
 
     async componentDidMount(){
+        AppState.addEventListener('change', this._handleAppStateChange);
+
         await this.locationInit();
+        await this.getServerTime();
 
         const uniqueID = getUniqueId();
         this.setState({uniqueID},()=>{
             this.checkUID(uniqueID);
         });
 
+        interval1 = setInterval(()=>{
+            this.updateClock();
+        },1000)
+
+        interval2 = setInterval(()=>{
+            this.getServerTime();
+        },300000)
+    }
+
+    getServerTime = async () => {
+        try {
+          let response = await fetch(
+            Config.ClockAPI.Clock
+          );
+            let responseJson = await response.json();
+            this.setState({CLOCK : responseJson.time, clockLoading: false});
+        } catch (error) {
+          console.log(error);
+        }
+    };
+
+    updateClock(){
+        let arrClock = this.state.CLOCK.split(':');
+        let h = parseInt(arrClock[0]);
+        let m = parseInt(arrClock[1]);
+        let s = parseInt(arrClock[2]);
+    
+        if(s < 59){
+          s = s + 1;
+        }else{
+          s = '00';
+          if(m < 59){
+            m = m + 1;
+          }else{
+            m = '00';
+            if(h < 23){
+              h = h + 1;
+            }else{
+              h = '00';
+            }
+          }
+        }
+    
+        h = this.checkTime(h);
+        m = this.checkTime(m);
+        s = this.checkTime(s);
+        
+        let f = h + ':' + m + ':' + s;
+        this.setState({CLOCK : f})
+    }
+    
+    checkTime(i) {
+        if (i < 10 && i.length != 2) {i = '0' + i};  // add zero in front of numbers < 10
+        return i;
     }
 
     async locationInit(){
@@ -191,9 +279,6 @@ export default class Home extends Component {
                 this.postData('I');
            }
         }, 100);
-
-
-      
     }
 
     async postData(val){
@@ -369,18 +454,29 @@ export default class Home extends Component {
 
     
     render() {
-        const { NIK, TANGGAL_IN, GEOTAG_IN, TANGGAL_OUT, GEOTAG_OUT, NAMA, isLoading } = this.state;
+        const { NIK, TANGGAL_IN, GEOTAG_IN, TANGGAL_OUT, GEOTAG_OUT, NAMA, isLoading, CLOCK, clockLoading } = this.state;
         return (
             <TouchableWithoutFeedback onPress={()=>{Keyboard.dismiss()}}>
-            <View style={{ flex:1 }}>
+            <View style={{ flex:1, backgroundColor:'white' }}>
                 {isLoading ? 
                     <View style={{alignItems:'center', justifyContent:'center', height: Constants.heightDevice * 0.85}}>
                         <ActivityIndicator size={'small'}/>
                         <Text>Mohon menunggu. . .</Text>
                     </View>
                 :
-                    <View>
-                        <View style={{alignItems:'center', justifyContent:'center',marginBottom:Constants.heightDevice * 0.05, marginTop:0.05 * Constants.heightDevice}}>
+                    <ScrollView>
+                        <View style={{alignItems:'flex-end', paddingTop:10}}>
+                            <View style={{backgroundColor:'#ff8000', padding:8, borderRadius:5, alignItems:'center', justifyContent:'center', right:5, minWidth:120}}>
+                            {clockLoading ? 
+                                <ActivityIndicator size={'small'} color={'white'}/>
+                            :
+                                <Text style={{fontSize: Constants.platform === 'ios' ? 20 : 22, color:'white', fontWeight:'bold'}}>
+                                    {CLOCK}
+                                </Text>
+                            }
+                            </View>
+                        </View>
+                        <View style={{alignItems:'center', justifyContent:'center',marginBottom:Constants.heightDevice * 0.05, marginTop:0.025 * Constants.heightDevice}}>
                             <Image source={require('../../assets/icons/clock.png')} 
                             style={{width:0.3 * Constants.widthDevice, height: 0.3 * Constants.widthDevice}}
                             resizeMode={'stretch'}/>
@@ -398,7 +494,7 @@ export default class Home extends Component {
                                         value={NIK}
                                         keyboardType={'numeric'}
                                         onChangeText={this.handleNIKchange} 
-                                        style={{backgroundColor: '#d9d9d9', height: 60, borderTopLeftRadius: 5,  borderBottomLeftRadius: 5, textAlign:'center', fontSize:25}}
+                                        style={{backgroundColor: '#d9d9d9', height: 60, borderRadius:5, textAlign:'center', fontSize:25}}
                                         maxLength={6}
                                     />
                                     {/* <TouchableOpacity onPress={()=>{this.checkNIK()}}>
@@ -446,7 +542,7 @@ export default class Home extends Component {
                                     <View style={{width:0.8 * Constants.widthDevice, flexDirection:'row', marginBottom:10}}>
                                         <View style={{ width:0.3 * Constants.widthDevice, alignItems:'flex-start', justifyContent:'center'}}><Text style={{fontWeight:'bold'}}>Lokasi Masuk</Text></View>
                                         <View style={{alignItems:'center', justifyContent:'center', width:10}}><Text style={{fontWeight:'bold'}}>:</Text></View>
-                                        <View style={{alignItems:'center', justifyContent:'center'}}><TouchableOpacity onPress={()=>{this.openMaps(GEOTAG_IN)}}><View style={{backgroundColor:'#cf7500', alignItems:'center', justifyContent:'center', padding:5, borderRadius:3}}><Text style={{color:'white'}}>show</Text></View></TouchableOpacity></View>
+                                        <View style={{alignItems:'center', justifyContent:'center'}}><TouchableOpacity onPress={()=>{this.openMaps(GEOTAG_IN)}}><View style={{backgroundColor:'#ff8000', alignItems:'center', justifyContent:'center', padding:5, borderRadius:3}}><Text style={{color:'white'}}>show</Text></View></TouchableOpacity></View>
                                     </View>
                                 </View>
                                 : null}
@@ -460,7 +556,7 @@ export default class Home extends Component {
                                     <View style={{width:0.8 * Constants.widthDevice, flexDirection:'row', marginBottom:10}}>
                                         <View style={{ width:0.3 * Constants.widthDevice, alignItems:'flex-start', justifyContent:'center'}}><Text style={{fontWeight:'bold'}}>Lokasi Keluar</Text></View>
                                         <View style={{alignItems:'center', justifyContent:'center', width:10}}><Text style={{fontWeight:'bold'}}>:</Text></View>
-                                        <View style={{alignItems:'center', justifyContent:'center'}}><TouchableOpacity onPress={()=>{this.openMaps(GEOTAG_OUT)}}><View style={{backgroundColor:'#cf7500', alignItems:'center', justifyContent:'center', padding:5, borderRadius:3}}><Text style={{color:'white'}}>show</Text></View></TouchableOpacity></View>
+                                        <View style={{alignItems:'center', justifyContent:'center'}}><TouchableOpacity onPress={()=>{this.openMaps(GEOTAG_OUT)}}><View style={{backgroundColor:'#ff8000', alignItems:'center', justifyContent:'center', padding:5, borderRadius:3}}><Text style={{color:'white'}}>show</Text></View></TouchableOpacity></View>
                                     </View>
                                 </View>
                                 :null}
@@ -469,11 +565,11 @@ export default class Home extends Component {
                             {/* : */}
                             {/* null} */}
                        </View>
-                    </View>
+                    </ScrollView>
                 }
-                 <View style={{position:'absolute', bottom:20, width:Constants.widthDevice, alignItems:'center'}}>
+                 {/* <View style={{position:'absolute', bottom:20, width:Constants.widthDevice, alignItems:'center'}}>
                     <Text>{'Ver. '+this.state.appVer}</Text>
-                </View>
+                </View> */}
             </View>
         </TouchableWithoutFeedback>
         )

@@ -13,6 +13,8 @@ target 'absensi' do
   
 
   platform :ios, '9.0'
+  # pod 'react-native-onesignal', :path => '../node_modules/react-native-onesignal'
+
   target 'absensiTests' do
     inherit! :search_paths
     # Pods for testing
