@@ -326,7 +326,7 @@ export default class Home extends Component {
                             this.checkUID(this.state.uniqueID);
                         }).catch((err)=>{
                             this.setState({isLoading:false});
-                            Alert.alert('',err);
+                            Alert.alert('','Terjadi kesalahan, pastikan internet anda aktif saat melakukan absen.');
                         })
                 }
             }
