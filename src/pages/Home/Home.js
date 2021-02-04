@@ -38,7 +38,9 @@ export default class Home extends Component {
 
             CLOCK: '00:00:00',
             appState: AppState.currentState,
-            clockLoading: true
+            clockLoading: true,
+
+            GPS_VLDTN:''
 
         }
     }
@@ -223,7 +225,8 @@ export default class Home extends Component {
             let message = responseJson[0].message;
             let NAMA = responseJson[0].NAME;
             let OFFICE_LOCATIONS = responseJson[0].LOCATION;
-            await this.setState({ NAMA, OFFICE_LOCATIONS });
+            let GPS_VLDTN = responseJson[0].GPS_VLDTN;
+            await this.setState({ NAMA, OFFICE_LOCATIONS, GPS_VLDTN });
             console.log('nik2');
 
         } catch (error) {
@@ -296,20 +299,32 @@ export default class Home extends Component {
                 Alert.alert('','Lokasi kantor tidak dapat ditentukan silahkan coba beberapa saat lagi.');
             }else{
                 let passed = false;
+
+                if(this.state.GPS_VLDTN == 'Y'){
+                    passed = false;
+                }
+                
+                if(this.state.GPS_VLDTN == 'N'){
+                    passed = true;
+                }
+
                 let office_lat_tmp = '';
                 let office_long_tmp = '';
                 let distance = '';
-                for(let i = 0; i < this.state.OFFICE_LOCATIONS.length; i ++){
-                    office_lat_tmp = this.state.OFFICE_LOCATIONS[i].OFFICE_GEOTAG_LAT;
-                    office_long_tmp = this.state.OFFICE_LOCATIONS[i].OFFICE_GEOTAG_LONG;
-                 
-                    distance = await this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, office_lat_tmp, office_long_tmp);
-                 
-                    if(distance <= 0.5){
-                        passed = true;
+
+                if(this.state.GPS_VLDTN == 'Y'){
+                    for(let i = 0; i < this.state.OFFICE_LOCATIONS.length; i ++){
+                        office_lat_tmp = this.state.OFFICE_LOCATIONS[i].OFFICE_GEOTAG_LAT;
+                        office_long_tmp = this.state.OFFICE_LOCATIONS[i].OFFICE_GEOTAG_LONG;
+                     
+                        distance = await this.getDistance(this.state.CURRENT_GEOTAG_LAT, this.state.CURRENT_GEOTAG_LONG, office_lat_tmp, office_long_tmp);
+                     
+                        if(distance <= 0.5){
+                            passed = true;
+                        }
                     }
                 }
-
+                
                 if(passed === false){
                     Alert.alert('','Pastikan jarak anda dengan kantor tidak lebih dari 500 m.');
                 }else{
